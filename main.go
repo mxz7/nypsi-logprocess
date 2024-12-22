@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -23,6 +24,8 @@ type LogLine struct {
 
 func main() {
 	router := gin.Default()
+
+	regex := regexp.MustCompile(`/::\w+/gm`)
 
 	router.POST("/process", func(c *gin.Context) {
 		authHeader := c.Request.Header.Get("Authorization")
@@ -50,15 +53,12 @@ func main() {
 
 		var formattedLines []LogLine
 
-		// formattedLines := make([]LogLine, len(rawLines))
-
 		for _, rawLine := range rawLines {
+
 			logLine := LogLine{}
 			err := json.Unmarshal([]byte(rawLine), &logLine)
 
 			if err != nil {
-				log.Printf("Error parsing line: %s", rawLine)
-
 				newLine := strings.Replace(rawLine, `"cluster":0`, `"cluster":"0"`, 1)
 				newLine = strings.Replace(newLine, `"cluster":1`, `"cluster":"1"`, 1)
 
@@ -66,20 +66,16 @@ func main() {
 
 				if err != nil {
 					log.Printf("%v", err)
-					log.Printf("failed again, skipping line %s", newLine)
+					log.Printf("failed, skipping line %s", newLine)
 					continue
-				} else {
-					log.Print("fixed with replace")
 				}
 			}
 
-			// log.Printf("Parsed line: %s", logLine.Message)
-
 			logLine.Date = time.UnixMilli(logLine.Time).Format("2006-01-02 15:04:05")
+			logLine.Message = regex.ReplaceAllString(logLine.Message, "")
 
 			formattedLines = append(formattedLines, logLine)
 
-			// formattedLines[i] = logLine
 		}
 
 		log.Printf("Processed %d lines", len(formattedLines))
