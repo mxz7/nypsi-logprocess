@@ -6,8 +6,10 @@ import (
 	"log"
 	"os"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -24,8 +26,6 @@ type LogLine struct {
 
 func main() {
 	router := gin.Default()
-
-	regex := regexp.MustCompile(`/::\w+/gm`)
 
 	router.POST("/process", func(c *gin.Context) {
 		authHeader := c.Request.Header.Get("Authorization")
@@ -51,32 +51,7 @@ func main() {
 			return
 		}
 
-		var formattedLines []LogLine
-
-		for _, rawLine := range rawLines {
-
-			logLine := LogLine{}
-			err := json.Unmarshal([]byte(rawLine), &logLine)
-
-			if err != nil {
-				newLine := strings.Replace(rawLine, `"cluster":0`, `"cluster":"0"`, 1)
-				newLine = strings.Replace(newLine, `"cluster":1`, `"cluster":"1"`, 1)
-
-				err := json.Unmarshal([]byte(newLine), &logLine)
-
-				if err != nil {
-					log.Printf("%v", err)
-					log.Printf("failed, skipping line %s", newLine)
-					continue
-				}
-			}
-
-			logLine.Date = time.UnixMilli(logLine.Time).Format("2006-01-02 15:04:05")
-			logLine.Message = regex.ReplaceAllString(logLine.Message, "")
-
-			formattedLines = append(formattedLines, logLine)
-
-		}
+		formattedLines := process(rawLines)
 
 		log.Printf("Processed %d lines", len(formattedLines))
 
@@ -99,4 +74,64 @@ func main() {
 	})
 
 	router.Run()
+}
+
+func process(rawLines []string) []LogLine {
+	numWorkers := runtime.NumCPU()
+
+	tasks := make(chan string, len(rawLines))
+	results := make(chan LogLine, len(rawLines))
+
+	var wg sync.WaitGroup
+
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go worker(tasks, results, &wg)
+	}
+
+	for _, rawLine := range rawLines {
+		tasks <- rawLine
+	}
+
+	close(tasks)
+
+	wg.Wait()
+	close(results)
+
+	var out []LogLine
+
+	for result := range results {
+		out = append(out, result)
+	}
+
+	return out
+}
+
+func worker(tasks <-chan string, results chan<- LogLine, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	regex := regexp.MustCompile(`/::\w+/gm`)
+
+	for task := range tasks {
+		logLine := LogLine{}
+		err := json.Unmarshal([]byte(task), &logLine)
+
+		if err != nil {
+			newLine := strings.Replace(task, `"cluster":0`, `"cluster":"0"`, 1)
+			newLine = strings.Replace(newLine, `"cluster":1`, `"cluster":"1"`, 1)
+
+			err := json.Unmarshal([]byte(newLine), &logLine)
+
+			if err != nil {
+				log.Printf("%v", err)
+				log.Printf("failed, skipping line %s", newLine)
+				continue
+			}
+		}
+
+		logLine.Date = time.UnixMilli(logLine.Time).Format("2006-01-02 15:04:05")
+		logLine.Message = regex.ReplaceAllString(logLine.Message, "")
+
+		results <- logLine
+	}
 }
