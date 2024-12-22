@@ -110,7 +110,7 @@ func process(rawLines []string) []LogLine {
 func worker(tasks <-chan string, results chan<- LogLine, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	regex := regexp.MustCompile(`/::\w+/gm`)
+	regex := regexp.MustCompile(`::\w+`)
 
 	for task := range tasks {
 		logLine := LogLine{}
@@ -130,7 +130,7 @@ func worker(tasks <-chan string, results chan<- LogLine, wg *sync.WaitGroup) {
 		}
 
 		logLine.Date = time.UnixMilli(logLine.Time).Format("2006-01-02 15:04:05")
-		logLine.Message = regex.ReplaceAllString(logLine.Message, "")
+		logLine.Message = strings.TrimLeft(regex.ReplaceAllString(logLine.Message, ""), " ")
 
 		results <- logLine
 	}
