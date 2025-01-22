@@ -129,7 +129,7 @@ func worker(tasks <-chan string, results chan<- LogLine, wg *sync.WaitGroup) {
 			}
 		}
 
-		logLine.Date = time.UnixMilli(logLine.Time).Format(time.RFC3339)
+		logLine.Date = time.UnixMilli(logLine.Time).Format("2006-01-02T15:04:05.000Z")
 		logLine.Message = strings.TrimLeft(regex.ReplaceAllString(logLine.Message, ""), " ")
 
 		results <- logLine
