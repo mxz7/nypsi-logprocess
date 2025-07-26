@@ -16,12 +16,12 @@ import (
 )
 
 type LogLine struct {
-	Date    string                 `json:"date"`
-	Level   string                 `json:"level"`
-	Message string                 `json:"msg"`
-	Time    int64                  `json:"time"`
-	Cluster string                 `json:"cluster"`
-	Data    map[string]interface{} `json:"data,omitempty"`
+	Date    string         `json:"date"`
+	Level   string         `json:"level"`
+	Message string         `json:"msg"`
+	Time    int64          `json:"time"`
+	Cluster string         `json:"cluster"`
+	Data    map[string]any `json:"data,omitempty"`
 }
 
 func main() {
@@ -84,7 +84,7 @@ func process(rawLines []string) []LogLine {
 
 	var wg sync.WaitGroup
 
-	for i := 0; i < numWorkers; i++ {
+	for range numWorkers {
 		wg.Add(1)
 		go worker(tasks, results, &wg)
 	}
